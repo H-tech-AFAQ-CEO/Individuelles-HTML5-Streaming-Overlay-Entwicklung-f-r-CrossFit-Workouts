@@ -1,0 +1,527 @@
+<!doctype html>
+<!--
+  CF OVERLAY STUDIO  ·  single-file CrossFit streaming overlay (HTML5 / CSS / JS, no build step, no licences)
+
+  LEISTUNGSUMFANG
+  ENTHALTEN
+   · 3 Zonen (links / Mitte / rechts), 1920×1080, transparent, responsive skaliert
+   · Steuerung (index.html) und Overlay-Ansicht (index.html?overlay) getrennt
+   · Logo hochladen / wechseln / entfernen, Texte, Schrift, Größe, Farbe, Ausrichtung, Ein-/Ausblenden
+   · Timer: Countdown, Stoppuhr mit Time Cap, Intervalle (Arbeit/Pause/Runden), Zeitfolge "2m + 30 + 1:00"
+   · Vorlaufzeit, Start/Pause/Fortsetzen/Reset, Farbwechsel Grün–Gelb–Rot, Signaltöne, Tastaturkürzel
+   · WOD-Infos, Trainer, Live-Uhr, Ein-/Ausblend-Animationen (5 Stile), Szenen speichern, Standard zurücksetzen
+   · OBS Browserquelle, Zoom über OBS Virtual Camera
+  EINGESCHRÄNKT ENTHALTEN
+   · Smartphone-/Tablet-Fernsteuerung: Bedienoberfläche ist responsive, synchronisiert aber nur im selben Browser/Gerät
+     (geräteübergreifend braucht ein kleiner Relay-Server → spätere Erweiterung)
+   · Ton im Stream: Overlay-URL mit &sound=1 + in OBS "Audio über OBS steuern"
+  SPÄTERE ERWEITERUNG
+   · Teilnehmernamen, Sponsorenlogos, Chat-/Infofelder
+
+  EXTERNE ABHÄNGIGKEITEN: Google Fonts (optional, Fallback vorhanden), Demo-Bilder von images.unsplash.com und randomuser.me
+-->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CF Overlay Studio</title>
+<script>if(/[?&#]overlay/.test(location.search+location.hash))document.documentElement.classList.add('ov')</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<style>
+/* ───────────── Basis / Steuerungsoberfläche ───────────── */
+:root{--bg:#09090b;--card:#111114;--line:#222228;--mut:#8b8b95;--fg:#f4f4f5;--ui:#ff5a36}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:14px/1.45 Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+#app{display:grid;grid-template-columns:392px 1fr;min-height:100vh}
+#side{border-right:1px solid var(--line);height:100vh;overflow:auto;position:sticky;top:0;padding:24px 20px 60px}
+#main{padding:24px 28px;display:flex;flex-direction:column;gap:16px;align-items:center;min-width:0}
+.logo{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.logo i{width:12px;height:12px;border-radius:50%;background:var(--ui);box-shadow:0 0 0 0 rgba(255,90,54,.6);animation:uiPulse 2.4s infinite}
+.logo b{font-size:15px;letter-spacing:.02em}.logo span{color:var(--mut);font-size:12px;margin-left:auto}
+@keyframes uiPulse{70%{box-shadow:0 0 0 10px rgba(255,90,54,0)}100%{box-shadow:0 0 0 0 rgba(255,90,54,0)}}
+details{border-top:1px solid var(--line);padding:2px 0}
+summary{list-style:none;cursor:pointer;padding:14px 0;font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);font-weight:600;display:flex;justify-content:space-between;transition:color .2s}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";font-size:16px;line-height:1;transition:transform .3s}
+details[open] summary{color:var(--fg)}details[open] summary::after{transform:rotate(45deg)}
+.body{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:2px 0 18px;animation:open .35s ease both}
+@keyframes open{from{opacity:0;transform:translateY(-6px)}}
+.row{grid-column:1/-1}.row.half{grid-column:auto}
+.fld{display:flex;flex-direction:column;gap:6px}.fld>span{font-size:12px;color:var(--mut)}
+.chk{display:flex;align-items:center;gap:9px;cursor:pointer;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);font-size:13px;transition:border-color .2s}
+.chk:hover{border-color:#34343c}.chk input{accent-color:var(--ui);width:15px;height:15px;margin:0}
+input[type=text],input[type=number],select,textarea{width:100%;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font:inherit;outline:none;transition:border-color .2s,box-shadow .2s}
+input:focus,select:focus,textarea:focus{border-color:var(--ui);box-shadow:0 0 0 3px rgba(255,90,54,.15)}
+textarea{resize:vertical}
+input[type=color]{width:100%;height:38px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:3px;cursor:pointer}
+input[type=range]{width:100%;accent-color:var(--ui)}
+.fld output{font-size:11px;color:var(--mut);align-self:flex-end;margin-top:-4px}
+button,.btn{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 14px;cursor:pointer;transition:transform .15s,border-color .2s,background .2s;text-decoration:none;display:inline-flex;align-items:center;gap:8px}
+button:hover,.btn:hover{border-color:#3a3a43;transform:translateY(-1px)}button:active{transform:none}
+button.primary{background:var(--ui);border-color:var(--ui);color:#fff;font-weight:600}
+button.primary:hover{background:#ff6e4d}
+.hint{color:var(--mut);font-size:12px;margin:0;grid-column:1/-1}
+.hint code{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:1px 6px;color:#ddd;word-break:break-all}
+.help ol{margin:0;padding-left:18px;color:#c9c9d0;font-size:13px}.help li{margin-bottom:6px}
+.scene{display:flex;justify-content:space-between;align-items:center;gap:8px;grid-column:1/-1;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+.scene span{display:flex;gap:6px}.scene button{padding:5px 10px;font-size:12px}
+#topbar{width:min(100%,calc((100vh - 190px)*16/9));display:flex;justify-content:space-between;align-items:center;gap:12px}
+#topbar select{width:auto}
+#viewport{position:relative;width:min(100%,calc((100vh - 190px)*16/9));aspect-ratio:16/9;border-radius:20px;overflow:hidden;border:1px solid var(--line);box-shadow:0 40px 100px rgba(0,0,0,.5);background:#0b0b0d}
+#viewport[data-bg=p1]{background:#0b0b0d url("https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&w=1920&q=70") center/cover}
+#viewport[data-bg=p2]{background:#0b0b0d url("https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&w=1920&q=70") center/cover}
+#viewport[data-bg=p3]{background:#0b0b0d url("https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?auto=format&fit=crop&w=1920&q=70") center/cover}
+#viewport[data-bg=checker]{background:conic-gradient(#1a1a1f 25%,#24242b 0 50%,#1a1a1f 0 75%,#24242b 0) 0 0/32px 32px}
+#viewport[data-bg=dark]{background:radial-gradient(120% 120% at 20% 0%,#1b1b22,#08080a)}
+#viewport[data-bg^=p]::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.1),rgba(0,0,0,.55))}
+#transport{display:flex;gap:10px;flex-wrap:wrap;align-items:center;width:min(100%,calc((100vh - 190px)*16/9))}
+#transport .kbd{color:var(--mut);font-size:12px;margin-left:auto}
+#bStart{min-width:132px;justify-content:center}
+#toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,30px);background:#f4f4f5;color:#09090b;padding:10px 18px;border-radius:999px;font-weight:600;opacity:0;pointer-events:none;transition:.35s cubic-bezier(.2,.8,.2,1);z-index:9}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+@media(max-width:940px){#app{grid-template-columns:1fr}#side{position:static;height:auto;border:0}#main{order:-1;padding:16px}#transport .kbd{display:none}}
+
+/* ───────────── Overlay-Modus (OBS): alles transparent, volle Fläche ───────────── */
+html.ov,html.ov body{background:transparent!important}
+html.ov #side,html.ov #topbar,html.ov #transport,html.ov #toast{display:none}
+html.ov #app{display:block}
+html.ov #main{position:fixed;inset:0;padding:0}
+html.ov #viewport{width:100vw;height:100vh;aspect-ratio:auto;border:0;border-radius:0;box-shadow:none;background:transparent!important}
+html.ov #viewport::before{display:none}
+
+/* ───────────── STAGE 1920×1080 ───────────── */
+#stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;pointer-events:none;color:#fff;font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;
+  --accent:#ff5a36;--tc:#fff;--speed:1;--off:48px;--bh:330px;--midw:680px}
+.band{position:absolute;left:48px;right:48px;bottom:var(--off);height:var(--bh);display:grid;grid-template-columns:1fr var(--midw) 1fr;gap:24px}
+.band.top{bottom:auto;top:var(--off)}
+.zone{position:relative;overflow:hidden;border-radius:28px;padding:32px 40px;display:flex;flex-direction:column;justify-content:center;align-items:var(--ai,flex-start);
+  animation-duration:calc(var(--speed)*.95s);animation-timing-function:cubic-bezier(.2,.8,.2,1);animation-fill-mode:both;animation-delay:var(--d,0s)}
+#zl{--dx:-90px;--dy:0px}#zm{--dx:0px;--dy:70px;align-items:center;text-align:center}#zr{--dx:90px;--dy:0px}
+.zone:not(.is-in):not(.is-out),.zone.is-off{opacity:0;animation:none}
+#stage.glass .zone{background:linear-gradient(160deg,rgba(26,26,31,.74),rgba(10,10,13,.58));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);border:1px solid rgba(255,255,255,.1);box-shadow:0 30px 80px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.06)}
+/* BEFORE: Lichtreflex wandert periodisch über jede Zone */
+.zone::before{content:"";position:absolute;inset:0;background:linear-gradient(105deg,transparent 38%,rgba(255,255,255,.085) 50%,transparent 62%);transform:translateX(-130%);animation:shine 8s ease-in-out infinite 1.4s;pointer-events:none}
+/* AFTER: Akzentlinie wächst nach dem Einblenden */
+.zone::after{content:"";position:absolute;top:0;left:40px;height:3px;width:0;background:var(--accent);border-radius:0 0 4px 4px;box-shadow:0 0 22px var(--accent)}
+#zm::after{left:50%;transform:translateX(-50%)}
+.zone.is-in::after{animation:line 1.2s .55s cubic-bezier(.2,.8,.2,1) both}
+/* Ein-/Ausblend-Animationen */
+#stage[data-in=rise] .zone.is-in{animation-name:inRise}
+#stage[data-in=slide] .zone.is-in{animation-name:inSlide}
+#stage[data-in=zoom] .zone.is-in{animation-name:inZoom}
+#stage[data-in=fade] .zone.is-in{animation-name:inFade}
+#stage[data-in=wipe] .zone.is-in{animation-name:inWipe}
+#stage[data-out=rise] .zone.is-out{animation-name:outRise}
+#stage[data-out=slide] .zone.is-out{animation-name:outSlide}
+#stage[data-out=zoom] .zone.is-out{animation-name:outZoom}
+#stage[data-out=fade] .zone.is-out{animation-name:outFade}
+#stage[data-out=wipe] .zone.is-out{animation-name:outWipe}
+@keyframes inRise{from{opacity:0;transform:translateY(48px) scale(.97);filter:blur(10px)}to{opacity:1;transform:none;filter:blur(0)}}
+@keyframes outRise{from{opacity:1;transform:none;filter:blur(0)}to{opacity:0;transform:translateY(48px) scale(.97);filter:blur(10px)}}
+@keyframes inSlide{from{opacity:0;transform:translate(var(--dx),var(--dy))}to{opacity:1;transform:none}}
+@keyframes outSlide{from{opacity:1;transform:none}to{opacity:0;transform:translate(var(--dx),var(--dy))}}
+@keyframes inZoom{from{opacity:0;transform:scale(.86)}to{opacity:1;transform:none}}
+@keyframes outZoom{from{opacity:1;transform:none}to{opacity:0;transform:scale(.86)}}
+@keyframes inFade{from{opacity:0}to{opacity:1}}
+@keyframes outFade{from{opacity:1}to{opacity:0}}
+@keyframes inWipe{from{opacity:1;clip-path:inset(0 100% 0 0 round 28px)}to{opacity:1;clip-path:inset(0 0 0 0 round 28px)}}
+@keyframes outWipe{from{opacity:1;clip-path:inset(0 0 0 0 round 28px)}to{opacity:1;clip-path:inset(0 0 0 100% round 28px)}}
+@keyframes shine{0%,62%{transform:translateX(-130%)}100%{transform:translateX(130%)}}
+@keyframes line{from{width:0}to{width:72px}}
+@keyframes blink{50%{opacity:.2}}
+@keyframes sweep{to{transform:translateX(100%)}}
+@keyframes ring{0%{transform:scale(.92);opacity:.75}100%{transform:scale(1.4);opacity:0}}
+@keyframes tick{0%{transform:scale(1.04)}100%{transform:scale(1)}}
+
+/* Zone links */
+.head{display:flex;align-items:center;gap:16px;margin-bottom:12px}
+.head img{height:64px;max-width:200px;object-fit:contain;border-radius:12px;filter:drop-shadow(0 6px 18px rgba(0,0,0,.4))}
+.brand{font-size:21px;font-weight:600;letter-spacing:.26em;text-transform:uppercase;color:var(--accent)}
+.brand::before{content:"";display:inline-block;width:26px;height:2px;background:var(--accent);vertical-align:middle;margin-right:14px;transform-origin:left;animation:line2 1.1s .7s both}
+@keyframes line2{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.title{font-weight:700;line-height:1.04;letter-spacing:-.02em;text-wrap:balance}
+.sub{margin-top:8px;opacity:.72;font-weight:500}
+.free{margin-top:12px;font-size:20px;opacity:.5;letter-spacing:.04em;white-space:pre-line}
+/* Zone Mitte */
+.phase{font-size:22px;letter-spacing:.34em;text-transform:uppercase;font-weight:600;color:var(--tc);transition:color .4s;margin:0 0 4px .34em}
+.time{font-size:168px;font-weight:600;line-height:1;letter-spacing:-.04em;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--tc);transition:color .4s;text-shadow:0 0 70px color-mix(in srgb,var(--tc) 40%,transparent)}
+.time .c{font-style:normal;position:relative;top:-.05em;margin:0 .02em}
+.running .time .c{animation:blink 1s ease-in-out infinite}
+.track{position:relative;width:100%;height:6px;border-radius:6px;background:rgba(255,255,255,.12);margin-top:20px;overflow:hidden}
+.fill{position:absolute;inset:0;border-radius:6px;background:var(--tc);transform-origin:left;transform:scaleX(var(--p,1));transition:transform .12s linear,background .4s;overflow:hidden}
+/* AFTER-Effekt: Glanz im Balken nur bei laufendem Timer */
+.fill::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.6),transparent);transform:translateX(-100%)}
+.running .fill::after{animation:sweep 2.2s linear infinite}
+.meta{margin-top:16px;min-height:34px;font-size:20px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.7)}
+.meta b{display:inline-block;font-weight:600;padding:3px 18px;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(255,255,255,.05)}
+/* Zone rechts */
+.top2{display:flex;justify-content:space-between;align-items:baseline;align-self:stretch;gap:20px}
+.wod{font-size:20px;font-weight:600;letter-spacing:.3em;text-transform:uppercase;color:var(--accent)}
+.clock{font-size:26px;opacity:.72;font-variant-numeric:tabular-nums;font-weight:500}
+.info{white-space:pre-line;font-weight:500;line-height:1.35;margin:14px 0 18px}
+.coach{display:flex;align-items:center;gap:16px}
+.av{position:relative;width:60px;height:60px;flex:none}
+.av img{width:100%;height:100%;border-radius:50%;object-fit:cover;border:2px solid var(--accent)}
+.av::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:2px solid var(--accent);opacity:0;animation:ring 3s ease-out infinite}
+.coach b{display:block;font-size:24px;font-weight:600;line-height:1.15}
+.coach small{display:block;font-size:19px;opacity:.6}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <div class="logo"><i></i><b>CF Overlay Studio</b><span>v1.0</span></div>
+    <div id="sections"></div>
+  </aside>
+
+  <main id="main">
+    <div id="topbar">
+      <select id="bg" aria-label="Vorschau-Hintergrund">
+        <option value="p1">Demo · Gym</option><option value="p2">Demo · Training</option><option value="p3">Demo · Hantel</option>
+        <option value="checker">Transparenz-Raster</option><option value="dark">Dunkel</option>
+      </select>
+      <a class="btn" id="ovLink" target="_blank" rel="noopener">Overlay-Ansicht öffnen ↗</a>
+    </div>
+
+    <div id="viewport" data-bg="p1">
+      <div id="stage" class="glass" data-in="rise" data-out="fade">
+        <div class="band" id="band">
+
+          <section class="zone" id="zl">
+            <div class="head" id="lHead"><img id="lLogo" alt=""><div class="brand" id="lBrand"></div></div>
+            <div class="title" id="lTitle"></div>
+            <div class="sub" id="lSub"></div>
+            <div class="free" id="lFree"></div>
+          </section>
+
+          <section class="zone" id="zm">
+            <div class="phase" id="mPhase"></div>
+            <div class="time" id="mTime">00:00</div>
+            <div class="track"><div class="fill" id="mFill"></div></div>
+            <div class="meta" id="mMeta"></div>
+          </section>
+
+          <section class="zone" id="zr">
+            <div class="top2"><div class="wod" id="rWod"></div><div class="clock" id="rClock"></div></div>
+            <div class="info" id="rInfo"></div>
+            <div class="coach" id="rCoach"><div class="av" id="rAv"><img id="rImg" alt=""></div><div><b id="rName"></b><small id="rNote"></small></div></div>
+          </section>
+
+        </div>
+      </div>
+    </div>
+
+    <div id="transport">
+      <button id="bStart" class="primary">Start</button>
+      <button id="bReset">Reset</button>
+      <button id="bShow">Overlay ausblenden</button>
+      <span class="kbd">Leertaste Start/Pause · R Reset · H Ein/Aus · 1 2 3 Zonen</span>
+    </div>
+  </main>
+</div>
+<div id="toast"></div>
+
+<script>
+/* ═════════════ 1. Hilfsfunktionen ═════════════ */
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const OVERLAY=document.documentElement.classList.contains('ov');
+const PARAMS=new URLSearchParams(location.search);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},
+             set(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}};
+const clone=o=>JSON.parse(JSON.stringify(o));
+function merge(d,s){const o={...d};for(const k in d){if(s&&k in s)o[k]=(d[k]&&typeof d[k]==='object')?merge(d[k],s[k]):s[k]}return o}
+let toastT;function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2200)}
+
+/* ═════════════ 2. Standardwerte ═════════════ */
+const DEMO_LOGO='data:image/svg+xml;utf8,'+encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='#ff5a36'/><path d='M17 41V23m8 23V18m14 28V18m8 23V23M25 32h14' stroke='#0b0b0d' stroke-width='5' stroke-linecap='round'/></svg>");
+const FONTS={'Inter':'Inter,system-ui,sans-serif','Oswald':"Oswald,Impact,sans-serif",'Playfair Display':"'Playfair Display',Georgia,serif",'Mono':'ui-monospace,Menlo,Consolas,monospace'};
+const DEFAULTS={
+  all:true,
+  left:{show:true,showLogo:true,showBrand:true,showTitle:true,showSub:true,showFree:true,logo:DEMO_LOGO,
+        brand:'Iron Harbor',title:'Saturday Throwdown',sub:'Live from the Box',free:'Presented by our partners',
+        font:'Inter',size:46,color:'#ffffff',align:'left'},
+  mid:{show:true,mode:'countdown',label:'AMRAP 12',pre:10,duration:'12:00',work:40,rest:20,rounds:8,seq:'2m + 30 + 1:00',
+       autoColor:true,color:'#ffffff',size:168,sound:true},
+  right:{show:true,wod:'Workout 26.1',info:'AMRAP 12\n21 Wall Balls\n15 Toes-to-Bar\n9 Power Cleans',coach:'Coach Alex Morgan',note:'Scale as needed',
+         avatar:'https://randomuser.me/api/portraits/men/32.jpg',showAvatar:true,showClock:true,font:'Inter',size:30,color:'#ffffff',align:'left'},
+  layout:{pos:'bottom',off:48,bh:330,midw:680,glass:true,accent:'#ff5a36',in:'rise',out:'fade',speed:1}
+};
+let S=merge(DEFAULTS,store.get('cfo.state',{}));
+let T=store.get('cfo.timer',{running:false,t0:0,el:0});          // Timer-Snapshot: gemeinsame Zeitbasis (Date.now)
+let scenes=store.get('cfo.scenes',{});
+
+/* ═════════════ 3. Timer-Logik ═════════════ */
+// "2m", "30", "30s", "1:00", "1:02:03" → Millisekunden (NaN bei ungültig)
+function parseDur(s){
+  s=String(s).trim().toLowerCase();let m;if(!s)return NaN;
+  if(m=s.match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/))return m[3]!==undefined?(+m[1]*3600+ +m[2]*60+ +m[3])*1000:(+m[1]*60+ +m[2])*1000;
+  if(m=s.match(/^(\d+(?:[.,]\d+)?)\s*(h|m|min|s|sec)?$/)){const n=parseFloat(m[1].replace(',','.')),u=m[2]||'s';return n*(u==='h'?3600:(u==='m'||u==='min')?60:1)*1000}
+  return NaN;
+}
+// Baut aus den Einstellungen die Abfolge der Abschnitte (Vorlauf, Arbeit, Pause …)
+function buildSegs(){
+  const m=S.mid,segs=[],pre=Math.max(0,+m.pre||0)*1000;
+  if(pre)segs.push({type:'pre',dur:pre,label:'Bereit'});
+  if(m.mode==='countdown'){const d=parseDur(m.duration);segs.push({type:'work',dur:isNaN(d)?0:d,label:m.label})}
+  else if(m.mode==='stopwatch'){const d=parseDur(m.duration);segs.push({type:'work',up:true,dur:(isNaN(d)||d<=0)?Infinity:d,label:m.label})}
+  else if(m.mode==='interval'){const w=(+m.work||0)*1000,r=(+m.rest||0)*1000,n=Math.max(1,+m.rounds||1);
+    for(let i=1;i<=n;i++){segs.push({type:'work',dur:w,label:'Arbeit',round:i,rounds:n});if(r&&i<n)segs.push({type:'rest',dur:r,label:'Pause',round:i,rounds:n})}}
+  else{const p=String(m.seq).split(/[+,;]/).map(parseDur).filter(x=>!isNaN(x)&&x>0);
+    p.forEach((d,i)=>segs.push({type:'work',dur:d,label:'Block '+(i+1),round:i+1,rounds:p.length}))}
+  return segs.filter(s=>s.dur>0);
+}
+function compute(el){
+  const segs=buildSegs();let acc=0;
+  if(!segs.length)return{done:true,shown:0,ratio:0,up:false,i:0,seg:{type:'work',label:S.mid.label}};
+  for(let i=0;i<segs.length;i++){const s=segs[i];
+    if(el<acc+s.dur){const se=el-acc;return{i,seg:s,done:false,up:!!s.up,shown:s.up?se:s.dur-se,ratio:isFinite(s.dur)?(s.dur-se)/s.dur:((se/1000)%60)/60}}
+    acc+=s.dur}
+  const s=segs[segs.length-1];return{i:segs.length,seg:s,done:true,up:!!s.up,shown:s.up&&isFinite(s.dur)?s.dur:0,ratio:0};
+}
+const elapsed=()=>T.running?Date.now()-T.t0:T.el;
+function fmt(ms,up){const s=Math.max(0,up?Math.floor(ms/1000):Math.ceil(ms/1000)),h=Math.floor(s/3600),m=Math.floor(s%3600/60),p=n=>String(n).padStart(2,'0');return h?[p(h),p(m),p(s%60)]:[p(m),p(s%60)]}
+function tStart(){if(T.running)return;if(compute(T.el).done&&T.el>0){T.el=0;lastI=-1}T.t0=Date.now()-T.el;T.running=true;commitT()}
+function tPause(){if(!T.running)return;T.el=Date.now()-T.t0;T.running=false;commitT()}
+const tToggle=()=>T.running?tPause():tStart();
+function tReset(){T.running=false;T.el=0;lastI=-1;lastSec=-1;commitT()}
+
+/* Signaltöne (WebAudio, keine Dateien) */
+let AC,lastI=-1,lastSec=-1;
+function beep(f,d,delay=0){try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();const t=AC.currentTime+delay,o=AC.createOscillator(),g=AC.createGain();
+  o.frequency.value=f;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.35,t+.01);g.gain.exponentialRampToValueAtTime(.0001,t+d);o.connect(g).connect(AC.destination);o.start(t);o.stop(t+d+.03)}catch(e){}}
+const soundOn=()=>S.mid.sound&&(!OVERLAY||PARAMS.get('sound')==='1');
+function beeps(c){
+  if(!T.running||!soundOn())return;
+  if(c.i!==lastI){if(lastI!==-1){if(c.done){beep(880,.25);beep(880,.25,.35);beep(1175,.6,.7)}else beep(880,.5)}lastI=c.i;lastSec=-1}
+  if(!c.done&&!c.up){const s=Math.ceil(c.shown/1000);if(s>=1&&s<=3&&s!==lastSec){beep(660,.12);lastSec=s}}
+}
+
+/* ═════════════ 4. Rendern ═════════════ */
+const GRN='#30d158',YEL='#ffd60a',RED='#ff453a',BLU='#64d2ff';
+const show=(el,on)=>{el.hidden=!on};
+let timeKey='';
+function renderStatic(){
+  const st=$('#stage'),L=S.left,M=S.mid,R=S.right,Y=S.layout;
+  st.dataset.in=Y.in;st.dataset.out=Y.out;st.classList.toggle('glass',!!Y.glass);
+  $('#band').classList.toggle('top',Y.pos==='top');
+  [['--accent',Y.accent],['--speed',Y.speed],['--off',Y.off+'px'],['--bh',Y.bh+'px'],['--midw',Y.midw+'px']].forEach(([k,v])=>st.style.setProperty(k,v));
+  // links
+  const zl=$('#zl');zl.style.fontFamily=FONTS[L.font];zl.style.color=L.color;zl.style.textAlign=L.align;
+  zl.style.setProperty('--ai',L.align==='left'?'flex-start':L.align==='right'?'flex-end':'center');
+  const img=$('#lLogo');if(img.getAttribute('src')!==L.logo)img.src=L.logo||'';
+  show(img,L.showLogo&&!!L.logo);show($('#lBrand'),L.showBrand&&!!L.brand);show($('#lHead'),(L.showLogo&&!!L.logo)||(L.showBrand&&!!L.brand));
+  $('#lBrand').textContent=L.brand;
+  $('#lTitle').textContent=L.title;$('#lTitle').style.fontSize=L.size+'px';show($('#lTitle'),L.showTitle&&!!L.title);
+  $('#lSub').textContent=L.sub;$('#lSub').style.fontSize=Math.round(L.size*.52)+'px';show($('#lSub'),L.showSub&&!!L.sub);
+  $('#lFree').textContent=L.free;show($('#lFree'),L.showFree&&!!L.free);
+  // Mitte
+  $('#zm').style.setProperty('--tc',M.color);timeKey='';
+  // rechts
+  const zr=$('#zr');zr.style.fontFamily=FONTS[R.font];zr.style.color=R.color;zr.style.textAlign=R.align;
+  zr.style.setProperty('--ai',R.align==='left'?'flex-start':R.align==='right'?'flex-end':'center');
+  $('#rWod').textContent=R.wod;$('#rInfo').textContent=R.info;$('#rInfo').style.fontSize=R.size+'px';
+  $('#rName').textContent=R.coach;$('#rNote').textContent=R.note;
+  const ri=$('#rImg');if(ri.getAttribute('src')!==R.avatar)ri.src=R.avatar;
+  show($('#rAv'),R.showAvatar&&!!R.avatar);show($('#rClock'),R.showClock);show($('#rCoach'),!!(R.coach||R.note));
+  // Sichtbarkeit je Zone mit gestaffelter Ein-/Ausblend-Animation
+  [['#zl','left'],['#zm','mid'],['#zr','right']].forEach(([sel,k],i)=>{
+    const z=$(sel),on=S.all&&S[k].show;
+    if(z.dataset.on===String(on))return;
+    const first=z.dataset.on===undefined;z.dataset.on=on;z.style.setProperty('--d',(i*.12)+'s');
+    if(first&&!on){z.classList.add('is-off');return}
+    z.classList.remove('is-off');z.classList.toggle('is-in',on);z.classList.toggle('is-out',!on);
+  });
+}
+function renderTimer(){
+  const c=compute(elapsed()),m=S.mid;
+  let col=m.color;
+  if(m.autoColor){
+    if(c.done)col=RED;else if(c.seg.type==='pre')col=YEL;else if(c.seg.type==='rest')col=BLU;
+    else if(c.up&&!isFinite(c.seg.dur))col=GRN;else col=c.ratio>.5?GRN:c.ratio>.2?YEL:RED;
+  }
+  const parts=fmt(c.shown,c.up),key=parts.join(':');
+  const tm=$('#mTime');
+  if(key!==timeKey){timeKey=key;tm.innerHTML=parts.map(x=>`<span>${x}</span>`).join('<i class="c">:</i>');tm.style.fontSize=(m.size*(parts.length>2?.7:1))+'px'}
+  $('#zm').style.setProperty('--tc',col);
+  $('#zm').classList.toggle('running',T.running);
+  $('#mPhase').textContent=c.done?'Fertig':c.seg.label;
+  $('#mFill').style.setProperty('--p',Math.max(0,Math.min(1,c.ratio)));
+  let meta='';
+  if(c.seg.rounds)meta=`<b>${m.mode==='interval'?'Runde':'Block'} ${c.done?c.seg.rounds:c.seg.round} / ${c.seg.rounds}</b>`;
+  else if(m.mode==='stopwatch'&&isFinite(c.seg.dur))meta=`<b>Time Cap ${fmt(c.seg.dur,true).join(':')}</b>`;
+  if($('#mMeta').dataset.v!==meta){$('#mMeta').dataset.v=meta;$('#mMeta').innerHTML=meta}
+  if(S.right.showClock)$('#rClock').textContent=new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  if(!OVERLAY){
+    $('#bStart').textContent=T.running?'Pause':(T.el>0&&!c.done?'Fortsetzen':'Start');
+    $('#bShow').textContent=S.all?'Overlay ausblenden':'Overlay einblenden';
+  }
+}
+function fit(){
+  const vp=$('#viewport'),w=vp.clientWidth,h=vp.clientHeight,s=Math.min(w/1920,h/1080);
+  $('#stage').style.transform=`translate(${(w-1920*s)/2}px,${(h-1080*s)/2}px) scale(${s})`;
+}
+
+/* ═════════════ 5. Speichern & Synchronisieren (Steuerung ⇄ Overlay) ═════════════ */
+const bc='BroadcastChannel' in window?new BroadcastChannel('cfo'):null;
+let warned=false;
+function persist(){
+  const ok=store.set('cfo.state',S)&store.set('cfo.timer',T);
+  if(!ok&&!warned){warned=true;toast('Speicher voll – Logo evtl. zu groß')}
+  bc&&bc.postMessage({S,T});
+}
+function commit(){persist();renderStatic();renderTimer();updateHints()}
+function commitT(){persist();renderTimer()}
+function receive(s,t){if(s)S=merge(DEFAULTS,s);if(t)T=t;renderStatic();renderTimer();if(!OVERLAY){fillControls();updateHints()}}
+bc&&(bc.onmessage=e=>receive(e.data.S,e.data.T));
+addEventListener('storage',e=>{if(e.key==='cfo.state'||e.key==='cfo.timer')receive(store.get('cfo.state',null),store.get('cfo.timer',null))});
+
+/* ═════════════ 6. Bedienoberfläche (aus Schema erzeugt) ═════════════ */
+const AL=[['left','Links'],['center','Zentriert'],['right','Rechts']];
+const FO=Object.keys(FONTS).map(f=>[f,f]);
+const AN=[['rise','Aufsteigen + Blur'],['slide','Gleiten'],['zoom','Zoom'],['fade','Einblenden'],['wipe','Wischen']];
+const UI=[
+ {t:'Links · Marke & Titel',open:1,f:[
+  {k:'left.show',l:'Zone anzeigen',t:'check'},{k:'left.showLogo',l:'Logo',t:'check'},
+  {k:'left.showBrand',l:'Marke',t:'check'},{k:'left.showTitle',l:'Titel',t:'check'},
+  {k:'left.showSub',l:'Untertitel',t:'check'},{k:'left.showFree',l:'Freitext',t:'check'},
+  {html:`<div class="row" style="display:flex;gap:8px;flex-wrap:wrap"><label class="btn">Logo hochladen / wechseln<input type="file" id="logoFile" accept="image/*" hidden></label><button id="logoDel">Entfernen</button><button id="logoDemo">Demo-Logo</button></div>`},
+  {k:'left.brand',l:'Marken- / Veranstaltungstitel',t:'text'},{k:'left.title',l:'Titel / Training',t:'text'},
+  {k:'left.sub',l:'Untertitel',t:'text'},{k:'left.free',l:'Freier Text',t:'area'},
+  {k:'left.font',l:'Schriftart',t:'select',o:FO},{k:'left.align',l:'Ausrichtung',t:'select',o:AL},
+  {k:'left.size',l:'Titelgröße',t:'range',min:28,max:90,step:1},{k:'left.color',l:'Textfarbe',t:'color'}]},
+ {t:'Mitte · Timer',open:1,f:[
+  {k:'mid.show',l:'Zone anzeigen',t:'check'},{k:'mid.sound',l:'Signaltöne',t:'check'},
+  {k:'mid.mode',l:'Modus',t:'select',o:[['countdown','Countdown'],['stopwatch','Stoppuhr (+ Time Cap)'],['interval','Intervalle (Arbeit/Pause)'],['sequence','Zeitfolge']]},
+  {k:'mid.label',l:'Beschriftung',t:'text',m:'countdown,stopwatch'},
+  {k:'mid.duration',l:'Dauer / Time Cap (12:00 · 12m · 720)',t:'text',m:'countdown,stopwatch'},
+  {k:'mid.work',l:'Arbeit (Sek.)',t:'num',m:'interval'},{k:'mid.rest',l:'Pause (Sek.)',t:'num',m:'interval'},
+  {k:'mid.rounds',l:'Runden',t:'num',m:'interval'},
+  {k:'mid.seq',l:'Zeitfolge, z. B. 2m + 30 + 1:00',t:'text',m:'sequence'},
+  {k:'mid.pre',l:'Vorlaufzeit (Sek.)',t:'num'},
+  {k:'mid.autoColor',l:'Farbwechsel Grün–Gelb–Rot',t:'check'},{k:'mid.color',l:'Feste Timerfarbe',t:'color'},
+  {k:'mid.size',l:'Timergröße',t:'range',min:90,max:230,step:2},
+  {html:`<p class="hint" id="totInfo"></p>`}]},
+ {t:'Rechts · WOD & Trainer',f:[
+  {k:'right.show',l:'Zone anzeigen',t:'check'},{k:'right.showClock',l:'Live-Uhr',t:'check'},
+  {k:'right.wod',l:'Überschrift',t:'text'},{k:'right.info',l:'WOD / Trainingsinfos',t:'area'},
+  {k:'right.coach',l:'Trainername',t:'text'},{k:'right.note',l:'Hinweis',t:'text'},
+  {k:'right.showAvatar',l:'Trainerfoto',t:'check'},{k:'right.avatar',l:'Foto-URL',t:'text'},
+  {k:'right.font',l:'Schriftart',t:'select',o:FO},{k:'right.align',l:'Ausrichtung',t:'select',o:AL},
+  {k:'right.size',l:'Textgröße',t:'range',min:20,max:48,step:1},{k:'right.color',l:'Textfarbe',t:'color'}]},
+ {t:'Layout & Animation',f:[
+  {k:'layout.pos',l:'Position',t:'select',o:[['bottom','Unten'],['top','Oben']]},{k:'layout.accent',l:'Akzentfarbe',t:'color'},
+  {k:'layout.off',l:'Abstand zum Rand',t:'range',min:0,max:300,step:2},
+  {k:'layout.bh',l:'Höhe der Zonen',t:'range',min:240,max:480,step:2},
+  {k:'layout.midw',l:'Breite Mitte',t:'range',min:520,max:900,step:4},
+  {k:'layout.glass',l:'Glas-Hintergrund',t:'check'},
+  {k:'layout.in',l:'Einblenden',t:'select',o:AN},{k:'layout.out',l:'Ausblenden',t:'select',o:AN},
+  {k:'layout.speed',l:'Animationsdauer ×',t:'range',min:.5,max:2.5,step:.1}]},
+ {t:'Szenen',f:[
+  {html:`<div class="row" style="display:flex;gap:8px"><input type="text" id="sceneName" placeholder="Name der Szene"><button id="sceneSave" class="primary">Speichern</button></div><div id="sceneList" style="display:contents"></div><div class="row"><button id="resetAll">Standardlayout wiederherstellen</button></div>`}]},
+ {t:'OBS · Zoom · Hilfe',f:[
+  {html:`<div class="row help"><ol>
+   <li>Seite über einen Webserver öffnen, z. B. <code>python3 -m http.server 8080</code> → <code>http://localhost:8080/</code> (oder irgendein statisches Hosting).</li>
+   <li><b>OBS:</b> Quelle → Browser → URL <code id="ovUrl"></code> · Breite 1920 · Höhe 1080.</li>
+   <li><b>Steuerung:</b> normaler Browser-Tab oder OBS → Docks → Benutzerdefinierte Browser-Docks mit der URL ohne <code>?overlay</code>.</li>
+   <li><b>Zoom:</b> in OBS „Virtuelle Kamera starten“, danach in Zoom die Kamera „OBS Virtual Camera“ wählen.</li>
+   <li><b>Ton im Stream:</b> URL mit <code>&amp;sound=1</code> und in OBS „Audio über OBS steuern“.</li>
+   <li>Streamlabs: dieselbe Browserquelle verwenden.</li></ol></div>`}]}
+];
+function field(f){
+  if(f.html)return f.html;
+  const a=`data-k="${f.k}"`,m=f.m?` data-modes="${f.m}"`:'';
+  if(f.t==='check')return `<div class="row half"${m}><label class="chk"><input type="checkbox" ${a}><span>${f.l}</span></label></div>`;
+  let inp;
+  switch(f.t){
+    case 'area':inp=`<textarea rows="4" ${a}></textarea>`;break;
+    case 'select':inp=`<select ${a}>${f.o.map(([v,n])=>`<option value="${v}">${n}</option>`).join('')}</select>`;break;
+    case 'range':inp=`<input type="range" min="${f.min}" max="${f.max}" step="${f.step}" ${a}><output></output>`;break;
+    case 'num':inp=`<input type="number" min="0" ${a}>`;break;
+    case 'color':inp=`<input type="color" ${a}>`;break;
+    default:inp=`<input type="text" ${a}>`}
+  const half=['num','color'].includes(f.t)?' half':'';
+  return `<div class="row${half}"${m}><label class="fld"><span>${f.l}</span>${inp}</label></div>`;
+}
+const getP=k=>k.split('.').reduce((o,p)=>o&&o[p],S);
+function setP(k,v){const a=k.split('.'),l=a.pop();a.reduce((o,p)=>o[p],S)[l]=v}
+const readEl=el=>el.type==='checkbox'?el.checked:(el.type==='number'||el.type==='range')?+el.value:el.value;
+function fillControls(){
+  $$('[data-k]').forEach(el=>{
+    if(document.activeElement===el)return;
+    const v=getP(el.dataset.k);
+    if(el.type==='checkbox')el.checked=!!v;else el.value=v;
+    const o=el.nextElementSibling;if(o&&o.tagName==='OUTPUT')o.textContent=v;
+  });
+  $$('[data-modes]').forEach(r=>r.hidden=!r.dataset.modes.split(',').includes(S.mid.mode));
+  $('#bg').value=$('#viewport').dataset.bg;
+}
+function updateHints(){
+  const segs=buildSegs(),ti=$('#totInfo');if(!ti)return;
+  const tot=segs.reduce((a,s)=>a+s.dur,0);
+  ti.textContent=isFinite(tot)?`Gesamtdauer ${fmt(tot,true).join(':')} · ${segs.length} Abschnitt${segs.length===1?'':'e'}`:'Stoppuhr ohne Time Cap – läuft bis Reset';
+  $$('[data-modes]').forEach(r=>r.hidden=!r.dataset.modes.split(',').includes(S.mid.mode));
+}
+function renderScenes(){
+  const n=Object.keys(scenes);
+  $('#sceneList').innerHTML=n.map(k=>`<div class="scene"><b>${esc(k)}</b><span><button data-load="${esc(k)}">Laden</button><button data-del="${esc(k)}">✕</button></span></div>`).join('')||'<p class="hint">Noch keine Szenen gespeichert.</p>';
+}
+function buildUI(){
+  $('#sections').innerHTML=UI.map(s=>`<details${s.open?' open':''}><summary>${s.t}</summary><div class="body">${s.f.map(field).join('')}</div></details>`).join('');
+  $$('[data-k]').forEach(el=>el.addEventListener('input',()=>{
+    setP(el.dataset.k,readEl(el));
+    const o=el.nextElementSibling;if(o&&o.tagName==='OUTPUT')o.textContent=el.value;
+    if(el.dataset.k==='mid.mode'||el.dataset.k.startsWith('mid.')&&el.dataset.k!=='mid.size'){tReset();}
+    commit();
+  }));
+  // Logo
+  $('#logoFile').addEventListener('change',e=>{
+    const f=e.target.files[0];if(!f)return;if(f.size>1.5e6){toast('Logo zu groß (max. 1,5 MB)');return}
+    const r=new FileReader();r.onload=()=>{S.left.logo=r.result;S.left.showLogo=true;fillControls();commit()};r.readAsDataURL(f);e.target.value='';
+  });
+  $('#logoDel').onclick=()=>{S.left.logo='';commit()};
+  $('#logoDemo').onclick=()=>{S.left.logo=DEMO_LOGO;S.left.showLogo=true;fillControls();commit()};
+  // Szenen
+  $('#sceneSave').onclick=()=>{const n=$('#sceneName').value.trim();if(!n)return toast('Bitte Namen eingeben');
+    scenes[n]=clone(S);if(store.set('cfo.scenes',scenes)){toast('Szene gespeichert');renderScenes()}else{delete scenes[n];toast('Speicher voll')}};
+  $('#sceneList').addEventListener('click',e=>{
+    const l=e.target.dataset.load,d=e.target.dataset.del;
+    if(l&&scenes[l]){const keep=S.all;S=merge(DEFAULTS,clone(scenes[l]));S.all=keep;tReset();fillControls();commit();toast('Szene „'+l+'“ geladen')}
+    if(d){delete scenes[d];store.set('cfo.scenes',scenes);renderScenes()}
+  });
+  $('#resetAll').onclick=()=>{S=clone(DEFAULTS);tReset();fillControls();commit();toast('Standardlayout wiederhergestellt')};
+  renderScenes();
+  const base=location.href.split(/[?#]/)[0],url=base+'?overlay';
+  $('#ovUrl').textContent=url;$('#ovLink').href=url;
+}
+
+/* ═════════════ 7. Start ═════════════ */
+if(!OVERLAY){
+  buildUI();fillControls();updateHints();
+  const bgv=store.get('cfo.bg','p1');$('#viewport').dataset.bg=bgv;$('#bg').value=bgv;
+  $('#bg').onchange=e=>{$('#viewport').dataset.bg=e.target.value;store.set('cfo.bg',e.target.value)};
+  $('#bStart').onclick=tToggle;$('#bReset').onclick=tReset;
+  $('#bShow').onclick=()=>{S.all=!S.all;commit()};
+  addEventListener('keydown',e=>{
+    if(/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)||e.metaKey||e.ctrlKey||e.altKey)return;
+    const k=e.key.toLowerCase();
+    if(e.code==='Space'){e.preventDefault();tToggle()}
+    else if(k==='r')tReset();
+    else if(k==='h'){S.all=!S.all;commit()}
+    else if(k.length===1&&'123'.includes(k)){const z=['left','mid','right'][+k-1];S[z].show=!S[z].show;fillControls();commit()}
+  });
+}
+new ResizeObserver(fit).observe($('#viewport'));addEventListener('resize',fit);
+fit();renderStatic();renderTimer();
+setInterval(()=>{                      // Haupttakt: Anzeige, Töne, automatisches Ende
+  const c=compute(elapsed());beeps(c);
+  if(!OVERLAY&&T.running&&c.done){T.el=elapsed();T.running=false;commitT();return}
+  renderTimer();
+},100);
+</script>
+</body>
+</html>
